@@ -66,7 +66,7 @@
             <a class="item-title" :href="item.url" target="_blank" rel="noreferrer">
               {{ item.title }}
             </a>
-            <p class="item-summary">{{ lang === 'zh' ? (item.chinese_summary || item.original_summary) : (item.original_summary || item.chinese_summary) }}</p>
+            <p class="item-summary">{{ getDisplaySummary(item) }}</p>
             <div class="item-tags" v-if="getItemTags(item).length">
               <span
                 v-for="tag in getItemTags(item)"
@@ -291,6 +291,19 @@ export default {
       history.replaceState(null, '', url);
       document.title = this.t('siteTitle');
       this.updateCountdown();
+    },
+    getDisplaySummary(item) {
+      if (this.lang === 'zh') {
+        return item.chinese_summary || item.original_summary || '';
+      }
+      let text = item.original_summary || item.chinese_summary || '';
+      // 替换后端 original_summary 中的中文标签为英文
+      text = text.replace(/语言:\s*/g, 'Language: ');
+      text = text.replace(/分数:\s*/g, 'Score: ');
+      text = text.replace(/评论数:\s*/g, 'Comments: ');
+      text = text.replace(/作者:\s*/g, 'Author: ');
+      text = text.replace(/节点:\s*/g, 'Node: ');
+      return text;
     },
     updateCountdown() {
       const now = new Date();
