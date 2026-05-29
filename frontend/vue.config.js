@@ -1,5 +1,5 @@
 module.exports = {
-  publicPath: '/',
+  publicPath: '/ai/',
   devServer: {
     host: 'localhost',
     port: 8080,
