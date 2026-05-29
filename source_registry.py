@@ -8,6 +8,7 @@
 SOURCE_GITHUB_DAILY_ID = "github-daily"
 SOURCE_GITHUB_WEEKLY_ID = "github-weekly"
 SOURCE_HACKER_NEWS_ID = "hacker-news"
+SOURCE_V2EX_ID = "v2ex"
 SOURCE_TLDR_AI_ID = "tldr-ai"
 SOURCE_OPENAI_ID = "openai"
 SOURCE_ANTHROPIC_ID = "anthropic"
@@ -33,6 +34,13 @@ SOURCE_DEFINITIONS = [
         "name": "Hacker News",
         "label": "Hacker News",
         "content_source": "Hacker News",
+        "category": "社区讨论",
+    },
+    {
+        "id": SOURCE_V2EX_ID,
+        "name": "V2EX",
+        "label": "V2EX",
+        "content_source": "V2EX",
         "category": "社区讨论",
     },
     {

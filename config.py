@@ -111,6 +111,25 @@ TLDR_AI_TOP_COUNT = int(os.environ.get("TLDR_AI_TOP_COUNT", "10"))
 TLDR_AI_MAX_RETRIES = int(os.environ.get("TLDR_AI_MAX_RETRIES", "5"))
 
 # =========================================================================
+# V2EX 配置
+# =========================================================================
+
+# V2EX API 基础地址
+V2EX_API_BASE = os.environ.get("V2EX_API_BASE", "https://www.v2ex.com/api")
+
+# 获取前 N 个技术热帖
+V2EX_TOP_COUNT = int(os.environ.get("V2EX_TOP_COUNT", "10"))
+
+# 每个帖子获取前 N 条回复
+V2EX_REPLIES_PER_TOPIC = int(os.environ.get("V2EX_REPLIES_PER_TOPIC", "10"))
+
+# V2EX 请求最大重试次数
+V2EX_MAX_RETRIES = int(os.environ.get("V2EX_MAX_RETRIES", "5"))
+
+# V2EX 请求间隔（秒），避免触发限流
+V2EX_REQUEST_INTERVAL = float(os.environ.get("V2EX_REQUEST_INTERVAL", "0.5"))
+
+# =========================================================================
 # 官方 AI / AI 工程实践信息源配置
 # =========================================================================
 

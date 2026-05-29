@@ -101,6 +101,36 @@ def _build_hn_table(stories):
     return "\n".join(rows)
 
 
+def _build_v2ex_table(topics):
+    """构建 V2EX 热帖表格的 HTML。"""
+    rows = [
+        "<table>",
+        "<tr>"
+        "<th>#</th>"
+        "<th>话题</th>"
+        "<th>节点</th>"
+        "<th>AI 总结</th>"
+        "</tr>",
+    ]
+
+    for i, t in enumerate(topics, 1):
+        url = t.get("url") or "https://www.v2ex.com/t/{}".format(t.get("id", ""))
+        title = _escape_html(t.get("title", ""))
+        node_title = _escape_html(t.get("node", {}).get("title", ""))
+        summary = _escape_html(t.get("ai_summary", ""))
+        rows.append(
+            "<tr>"
+            "<td>{}</td>"
+            '<td><a href="{}">{}</a></td>'
+            "<td>{}</td>"
+            '<td class="summary">{}</td>'
+            "</tr>".format(i, url, title, node_title, summary)
+        )
+
+    rows.append("</table>")
+    return "\n".join(rows)
+
+
 def _build_tldr_ai_table(items):
     """构建 TLDR AI 表格的 HTML。"""
     rows = [
@@ -184,20 +214,23 @@ def _build_content_items_table(items):
     return "\n".join(rows)
 
 
-def build_email_html(daily_repos, weekly_repos, hn_stories, tldr_items=None, content_items=None):
+def build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics=None, tldr_items=None, content_items=None):
     """
-    将 GitHub Trending、Hacker News 和 TLDR AI 数据构建成完整的 HTML 邮件内容。
+    将 GitHub Trending、Hacker News、V2EX 和 TLDR AI 数据构建成完整的 HTML 邮件内容。
 
     Args:
         daily_repos: GitHub 每日热点仓库列表
         weekly_repos: GitHub 每周热点仓库列表
         hn_stories: Hacker News 热门帖子列表
+        v2ex_topics: V2EX 技术热帖列表
         tldr_items: TLDR AI 精选内容列表
         content_items: 统一信息项列表
 
     Returns:
         str: 完整的 HTML 邮件内容
     """
+    if v2ex_topics is None:
+        v2ex_topics = []
     if tldr_items is None:
         tldr_items = []
     if content_items is None:
@@ -269,6 +302,14 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, tldr_items=None, con
         html_parts.append(_build_hn_table(hn_stories))
         html_parts.append("</div>")
 
+    # V2EX 板块
+    if v2ex_topics:
+        html_parts.append('<div class="section-divider"></div>')
+        html_parts.append('<div class="v2ex-section">')
+        html_parts.append("<h2>V2EX 中文技术社区热议 Top {}</h2>".format(len(v2ex_topics)))
+        html_parts.append(_build_v2ex_table(v2ex_topics))
+        html_parts.append("</div>")
+
     # TLDR AI 板块
     if tldr_items:
         html_parts.append('<div class="section-divider"></div>')
@@ -316,6 +357,7 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, tldr_items=None, con
         "<p>此邮件由 AI 后端专项信息源 Spider 自动生成并发送。</p>",
         "<p>数据来源：<a href='https://github.com/trending'>GitHub Trending</a> "
         "| <a href='https://news.ycombinator.com/'>Hacker News</a> "
+        "| <a href='https://www.v2ex.com/'>V2EX</a> "
         "| <a href='https://ai.tldr.tech/'>TLDR AI</a> "
         "| <a href='https://openai.com/news/'>OpenAI</a> "
         "| <a href='https://www.anthropic.com/news'>Anthropic</a> "

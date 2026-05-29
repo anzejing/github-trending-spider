@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 SOURCE_GITHUB_DAILY = "GitHub Trending Daily"
 SOURCE_GITHUB_WEEKLY = "GitHub Trending Weekly"
 SOURCE_HACKER_NEWS = "Hacker News"
+SOURCE_V2EX = "V2EX"
 SOURCE_TLDR_AI = "TLDR AI"
 SOURCE_OPENAI = "OpenAI"
 SOURCE_ANTHROPIC = "Anthropic"
@@ -121,12 +122,13 @@ def summarize_content_items(items, section_label):
     return items
 
 
-def build_all_content_items(daily_repos, weekly_repos, hn_stories, tldr_items, ai_source_items):
-    """将 6 个来源数据适配为统一 JSON 信息项。"""
+def build_all_content_items(daily_repos, weekly_repos, hn_stories, v2ex_topics, tldr_items, ai_source_items):
+    """将 7 个来源数据适配为统一 JSON 信息项。"""
     items = []
     items.extend(_github_to_items(daily_repos, SOURCE_GITHUB_DAILY, "每日热点"))
     items.extend(_github_to_items(weekly_repos, SOURCE_GITHUB_WEEKLY, "每周热点"))
     items.extend(_hn_to_items(hn_stories))
+    items.extend(_v2ex_to_items(v2ex_topics))
     items.extend(_tldr_to_items(tldr_items))
     items.extend(ai_source_items or [])
     return items
@@ -200,6 +202,34 @@ def _hn_to_items(stories):
             title=story.get("title", ""),
             url=url,
             published_at=str(story.get("time", "")),
+            original_summary=original_summary,
+            chinese_summary=summary,
+            backend_focus=summary,
+            meta=meta,
+        ))
+    return items
+
+
+def _v2ex_to_items(topics):
+    items = []
+    for topic in topics or []:
+        url = topic.get("url") or "https://www.v2ex.com/t/{}".format(topic.get("id", ""))
+        node_title = topic.get("node", {}).get("title", "")
+        member = topic.get("member", {}).get("username", "")
+        original_summary = "节点: {} | 作者: {}".format(node_title, member)
+        summary = topic.get("ai_summary", "")
+        meta = {
+            "node": topic.get("node", {}).get("name", ""),
+            "node_title": node_title,
+            "replies_count": len(topic.get("replies", [])),
+            "v2ex_url": url,
+        }
+        items.append(make_content_item(
+            source=SOURCE_V2EX,
+            category=CATEGORY_COMMUNITY,
+            title=topic.get("title", ""),
+            url=url,
+            published_at=str(topic.get("created", "")),
             original_summary=original_summary,
             chinese_summary=summary,
             backend_focus=summary,

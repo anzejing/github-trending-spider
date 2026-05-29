@@ -87,6 +87,7 @@ const SOURCE_DISPLAY_MAP = {
   'github-daily':  { label: '今日开源热榜', category: 'GitHub · 日榜' },
   'github-weekly': { label: '本周开源精选', category: 'GitHub · 周榜' },
   'hacker-news':   { label: '硅谷社区热议', category: 'Hacker News'   },
+  'v2ex':          { label: '中文技术社区热议', category: 'V2EX'          },
   'tldr-ai':       { label: 'AI 速报精选',   category: 'TLDR AI'       },
   'openai':        { label: 'OpenAI 最新动态', category: '官方更新'    },
   'anthropic':     { label: 'Anthropic 最新动态', category: '官方更新' },

@@ -36,6 +36,7 @@ def run_spider():
     # 延迟导入，确保日志配置已初始化
     from github_trending import fetch_trending, ai_summarize
     from hacker_news import fetch_hn_top_stories, fetch_all_comments, ai_summarize_hn
+    from v2ex import fetch_v2ex_hot_topics, fetch_topic_replies, ai_summarize_v2ex
     from tldr_ai import fetch_latest_tldr_ai_issue, ai_translate_tldr_ai
     from official_ai_sources import fetch_anthropic_news, fetch_infoq_ai_development, fetch_openai_news
     from content_items import build_all_content_items, summarize_content_items, write_content_json
@@ -94,6 +95,29 @@ def run_spider():
         logger.error("HN 阶段异常: %s", e)
         errors.append("HN 阶段异常: {}".format(e))
         hn_stories = []
+
+    # ==========================
+    # V2EX 阶段
+    # ==========================
+    v2ex_topics = []
+    logger.info("--- [V2EX] 开始获取全站热帖 ---")
+    try:
+        v2ex_topics = fetch_v2ex_hot_topics()
+        if v2ex_topics:
+            logger.info("V2EX 热帖: 获取到 %d 个技术帖", len(v2ex_topics))
+
+            logger.info("--- [V2EX] 开始获取回复 ---")
+            v2ex_topics = fetch_topic_replies(v2ex_topics)
+
+            logger.info("--- [V2EX] AI 总结 ---")
+            time.sleep(5)
+            v2ex_topics = ai_summarize_v2ex(v2ex_topics)
+        else:
+            errors.append("获取 V2EX 热帖失败")
+    except Exception as e:
+        logger.error("V2EX 阶段异常: %s", e)
+        errors.append("V2EX 阶段异常: {}".format(e))
+        v2ex_topics = []
 
     # ==========================
     # TLDR AI 阶段
@@ -166,7 +190,7 @@ def run_spider():
     # ==========================
     # 判断是否有数据
     # ==========================
-    if not daily_repos and not weekly_repos and not hn_stories and not tldr_items and not ai_source_items:
+    if not daily_repos and not weekly_repos and not hn_stories and not v2ex_topics and not tldr_items and not ai_source_items:
         logger.error("所有数据源均获取失败")
         if SEND_EMAIL_ENABLED:
             send_failure_notify(
@@ -178,6 +202,7 @@ def run_spider():
         daily_repos,
         weekly_repos,
         hn_stories,
+        v2ex_topics,
         tldr_items,
         ai_source_items,
     )
@@ -207,7 +232,7 @@ def run_spider():
         return True
 
     logger.info("--- 生成邮件内容 ---")
-    html = build_email_html(daily_repos, weekly_repos, hn_stories, tldr_items, content_items)
+    html = build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics, tldr_items, content_items)
 
     today = datetime.now().strftime("%Y-%m-%d")
     subject = "AI 后端专项信息源报告 - {}".format(today)
