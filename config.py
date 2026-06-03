@@ -134,6 +134,21 @@ V2EX_MAX_RETRIES = int(os.environ.get("V2EX_MAX_RETRIES", "5"))
 V2EX_REQUEST_INTERVAL = float(os.environ.get("V2EX_REQUEST_INTERVAL", "0.5"))
 
 # =========================================================================
+# Linux.do 技术日报配置
+# =========================================================================
+
+# Linux.do 技术聚合日报页面。只读取该页面摘要和原帖索引，不抓取原帖正文。
+LINUX_DO_NEWS_URL = os.environ.get(
+    "LINUX_DO_NEWS_URL", "https://news.linuxe.top/"
+)
+
+# Linux.do 原帖卡片最多展示 N 条；0 表示全部解析到的条目。
+LINUX_DO_MAX_ITEMS = int(os.environ.get("LINUX_DO_MAX_ITEMS", "0"))
+
+# Linux.do 请求最大重试次数
+LINUX_DO_MAX_RETRIES = int(os.environ.get("LINUX_DO_MAX_RETRIES", "5"))
+
+# =========================================================================
 # 官方 AI / AI 工程实践信息源配置
 # =========================================================================
 

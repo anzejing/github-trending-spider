@@ -8,7 +8,7 @@ HTML 邮件生成模块
 from datetime import datetime
 
 from config import AI_MODEL
-from content_items import SOURCE_ANTHROPIC, SOURCE_INFOQ_AI, SOURCE_OPENAI
+from content_items import SOURCE_ANTHROPIC, SOURCE_INFOQ_AI, SOURCE_LINUX_DO, SOURCE_OPENAI
 
 
 def _escape_html(text):
@@ -169,6 +169,48 @@ def _build_tldr_ai_table(items):
     return "\n".join(rows)
 
 
+def _build_linux_do_table(items):
+    """构建 Linux.do 技术日报表格。"""
+    rows = [
+        "<table>",
+        "<tr>"
+        "<th>#</th>"
+        "<th>标题</th>"
+        "<th>分组</th>"
+        "<th>回复数</th>"
+        "<th>AI 总结</th>"
+        "</tr>",
+    ]
+
+    for i, item in enumerate(items, 1):
+        title = _escape_html(item.get("title", ""))
+        url = _escape_html(item.get("url", ""))
+        meta = item.get("meta", {}) or {}
+        section_title = _escape_html(meta.get("section_title", ""))
+        reply_count = _escape_html(meta.get("reply_count", 0))
+        summary = _escape_html(item.get("chinese_summary", ""))
+
+        rows.append(
+            "<tr>"
+            "<td>{}</td>"
+            '<td><a href="{}">{}</a></td>'
+            "<td>{}</td>"
+            '<td class="comments">{}</td>'
+            '<td class="summary">{}</td>'
+            "</tr>".format(
+                i,
+                url,
+                title,
+                section_title,
+                reply_count,
+                summary,
+            )
+        )
+
+    rows.append("</table>")
+    return "\n".join(rows)
+
+
 def _build_content_items_table(items):
     """构建统一信息项表格。"""
     rows = [
@@ -248,6 +290,10 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics=None, tl
         item for item in content_items
         if item.get("source") == SOURCE_INFOQ_AI
     ]
+    linux_do_items = [
+        item for item in content_items
+        if item.get("source") == SOURCE_LINUX_DO
+    ]
 
     today = datetime.now().strftime("%Y-%m-%d")
     html_parts = [
@@ -300,6 +346,14 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics=None, tl
         html_parts.append('<div class="hn-section">')
         html_parts.append("<h2>Hacker News Top {}</h2>".format(len(hn_stories)))
         html_parts.append(_build_hn_table(hn_stories))
+        html_parts.append("</div>")
+
+    # Linux.do 板块
+    if linux_do_items:
+        html_parts.append('<div class="section-divider"></div>')
+        html_parts.append('<div class="linux-do-section">')
+        html_parts.append("<h2>Linux.do 技术日报 Top {}</h2>".format(len(linux_do_items)))
+        html_parts.append(_build_linux_do_table(linux_do_items))
         html_parts.append("</div>")
 
     # V2EX 板块
@@ -357,6 +411,7 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics=None, tl
         "<p>此邮件由 AI 后端专项信息源 Spider 自动生成并发送。</p>",
         "<p>数据来源：<a href='https://github.com/trending'>GitHub Trending</a> "
         "| <a href='https://news.ycombinator.com/'>Hacker News</a> "
+        "| <a href='https://news.linuxe.top/'>Linux.do 技术日报</a> "
         "| <a href='https://www.v2ex.com/'>V2EX</a> "
         "| <a href='https://ai.tldr.tech/'>TLDR AI</a> "
         "| <a href='https://openai.com/news/'>OpenAI</a> "

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 SOURCE_GITHUB_DAILY = "GitHub Trending Daily"
 SOURCE_GITHUB_WEEKLY = "GitHub Trending Weekly"
 SOURCE_HACKER_NEWS = "Hacker News"
+SOURCE_LINUX_DO = "Linux.do"
 SOURCE_V2EX = "V2EX"
 SOURCE_TLDR_AI = "TLDR AI"
 SOURCE_OPENAI = "OpenAI"
@@ -122,12 +123,13 @@ def summarize_content_items(items, section_label):
     return items
 
 
-def build_all_content_items(daily_repos, weekly_repos, hn_stories, v2ex_topics, tldr_items, ai_source_items):
-    """将 7 个来源数据适配为统一 JSON 信息项。"""
+def build_all_content_items(daily_repos, weekly_repos, hn_stories, v2ex_topics, tldr_items, ai_source_items, linux_do_items=None):
+    """将多个来源数据适配为统一 JSON 信息项。"""
     items = []
     items.extend(_github_to_items(daily_repos, SOURCE_GITHUB_DAILY, "每日热点"))
     items.extend(_github_to_items(weekly_repos, SOURCE_GITHUB_WEEKLY, "每周热点"))
     items.extend(_hn_to_items(hn_stories))
+    items.extend(_linux_do_to_items(linux_do_items))
     items.extend(_v2ex_to_items(v2ex_topics))
     items.extend(_tldr_to_items(tldr_items))
     items.extend(ai_source_items or [])
@@ -202,6 +204,39 @@ def _hn_to_items(stories):
             title=story.get("title", ""),
             url=url,
             published_at=str(story.get("time", "")),
+            original_summary=original_summary,
+            chinese_summary=summary,
+            backend_focus=summary,
+            meta=meta,
+        ))
+    return items
+
+
+def _linux_do_to_items(linux_do_items):
+    items = []
+    for item in linux_do_items or []:
+        section_title = item.get("section_title", "")
+        section_summary = item.get("section_summary", "")
+        reply_count = item.get("reply_count", 0)
+        original_summary = "分组: {} | 回复数: {} | {}".format(
+            section_title,
+            reply_count,
+            section_summary,
+        )
+        summary = item.get("ai_summary") or section_summary
+        meta = {
+            "reply_count": reply_count,
+            "section_title": section_title,
+            "daily_url": item.get("daily_url", ""),
+            "daily_title": item.get("daily_title", ""),
+            "daily_headline": item.get("daily_headline", ""),
+        }
+        items.append(make_content_item(
+            source=SOURCE_LINUX_DO,
+            category=CATEGORY_COMMUNITY,
+            title=item.get("title", ""),
+            url=item.get("url", ""),
+            published_at=item.get("published_at", ""),
             original_summary=original_summary,
             chinese_summary=summary,
             backend_focus=summary,

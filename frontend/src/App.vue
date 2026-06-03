@@ -81,11 +81,11 @@
           </div>
           <a
             class="open-link"
-            :href="isHN(item) ? ((item.meta && item.meta.hn_url) || item.url) : item.url"
+            :href="getOpenUrl(item)"
             target="_blank"
             rel="noreferrer"
           >
-            {{ isHN(item) ? t('viewDiscussion') : t('readOriginal') }}
+            {{ isDiscussion(item) ? t('viewDiscussion') : t('readOriginal') }}
           </a>
         </article>
       </section>
@@ -131,6 +131,7 @@ const I18N = {
     footerEmailEgg: '隐藏小彩蛋: 支持邮件接收AI讯息',
     emailHint: '请将您的邮箱发送至727987105@qq.com',
     comments: ' 评论',
+    replies: ' 回复',
   },
   en: {
     siteTitle: 'Daily AI Frontier',
@@ -151,6 +152,7 @@ const I18N = {
     footerEmailEgg: 'Hidden easter egg: Support receiving AI updates by email',
     emailHint: 'Please send your email address to 727987105@qq.com',
     comments: ' comments',
+    replies: ' replies',
   }
 };
 
@@ -158,6 +160,7 @@ const SOURCE_DISPLAY_MAP = {
   'github-daily':  { label: '今日开源热榜', category: 'GitHub · 日榜' },
   'github-weekly': { label: '本周开源精选', category: 'GitHub · 周榜' },
   'hacker-news':   { label: '硅谷社区热议', category: 'Hacker News'   },
+  'linux-do':      { label: 'Linux.do 技术日报', category: '社区讨论'     },
   'v2ex':          { label: '中文技术社区热议', category: 'V2EX'          },
   'tldr-ai':       { label: 'AI 速报精选',   category: 'TLDR AI'       },
   'openai':        { label: 'OpenAI 最新动态', category: '官方更新'    },
@@ -196,6 +199,7 @@ const SOURCE_DISPLAY_MAP_EN = {
   'github-daily':  { label: 'GitHub Daily Trending', category: 'GitHub · Daily' },
   'github-weekly': { label: 'GitHub Weekly Picks',   category: 'GitHub · Weekly' },
   'hacker-news':   { label: 'Hacker News Hot',       category: 'Hacker News' },
+  'linux-do':      { label: 'Linux.do Daily',        category: 'Community' },
   'v2ex':          { label: 'V2EX Hot Topics',       category: 'V2EX' },
   'tldr-ai':       { label: 'TLDR AI Digest',        category: 'TLDR AI' },
   'openai':        { label: 'OpenAI Updates',        category: 'Official' },
@@ -312,6 +316,8 @@ export default {
       text = text.replace(/评论数:\s*/g, 'Comments: ');
       text = text.replace(/作者:\s*/g, 'Author: ');
       text = text.replace(/节点:\s*/g, 'Node: ');
+      text = text.replace(/分组:\s*/g, 'Section: ');
+      text = text.replace(/回复数:\s*/g, 'Replies: ');
       return text;
     },
     updateCountdown() {
@@ -356,8 +362,14 @@ export default {
       const map = this.lang === 'en' ? SOURCE_DISPLAY_MAP_EN : SOURCE_DISPLAY_MAP;
       return (map[source.id] || source).category;
     },
-    isHN(item) {
-      return item.source === 'Hacker News';
+    isDiscussion(item) {
+      return item.source === 'Hacker News' || item.source === 'Linux.do';
+    },
+    getOpenUrl(item) {
+      if (item.source === 'Hacker News') {
+        return (item.meta && item.meta.hn_url) || item.url;
+      }
+      return item.url;
     },
     formatDate(str) {
       if (!str) return '';
@@ -389,6 +401,10 @@ export default {
       } else if (src === 'Hacker News') {
         if (meta.score != null)    tags.push({ label: '▲ ' + meta.score, type: 'stat' });
         if (meta.comments != null) tags.push({ label: '💬 ' + meta.comments + this.t('comments'), type: 'fork' });
+      } else if (src === 'Linux.do') {
+        if (meta.section_title) tags.push({ label: meta.section_title, type: 'category' });
+        if (meta.reply_count != null) tags.push({ label: '💬 ' + meta.reply_count + this.t('replies'), type: 'fork' });
+        if (item.published_at) tags.push({ label: this.formatDate(item.published_at), type: 'date' });
       } else if (src === 'TLDR AI') {
         const cat = this.lang === 'en' ? item.category : TLDR_CATEGORY_MAP[item.category];
         if (cat) tags.push({ label: cat, type: 'category' });

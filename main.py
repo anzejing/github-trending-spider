@@ -128,6 +128,7 @@ def run_spider(scheduled_time=None):
     # 延迟导入，确保日志配置已初始化
     from github_trending import fetch_trending, ai_summarize
     from hacker_news import fetch_hn_top_stories, fetch_all_comments, ai_summarize_hn
+    from linux_do_news import fetch_linux_do_daily_items, ai_summarize_linux_do_items
     from v2ex import fetch_v2ex_hot_topics, fetch_topic_replies, ai_summarize_v2ex
     from tldr_ai import fetch_latest_tldr_ai_issue, ai_translate_tldr_ai
     from official_ai_sources import fetch_anthropic_news, fetch_infoq_ai_development, fetch_openai_news
@@ -187,6 +188,26 @@ def run_spider(scheduled_time=None):
         logger.error("HN 阶段异常: %s", e)
         errors.append("HN 阶段异常: {}".format(e))
         hn_stories = []
+
+    # ==========================
+    # Linux.do 技术日报阶段
+    # ==========================
+    linux_do_items = []
+    logger.info("--- [Linux.do] 开始获取技术日报 ---")
+    try:
+        linux_do_items = fetch_linux_do_daily_items()
+        if linux_do_items:
+            logger.info("Linux.do 技术日报: 获取到 %d 条原帖", len(linux_do_items))
+
+            logger.info("--- [Linux.do] AI 总结 ---")
+            time.sleep(5)
+            linux_do_items = ai_summarize_linux_do_items(linux_do_items)
+        else:
+            errors.append("获取 Linux.do 技术日报失败")
+    except Exception as e:
+        logger.error("Linux.do 阶段异常: %s", e)
+        errors.append("Linux.do 阶段异常: {}".format(e))
+        linux_do_items = []
 
     # ==========================
     # V2EX 阶段
@@ -282,7 +303,7 @@ def run_spider(scheduled_time=None):
     # ==========================
     # 判断是否有数据
     # ==========================
-    if not daily_repos and not weekly_repos and not hn_stories and not v2ex_topics and not tldr_items and not ai_source_items:
+    if not daily_repos and not weekly_repos and not hn_stories and not linux_do_items and not v2ex_topics and not tldr_items and not ai_source_items:
         logger.error("所有数据源均获取失败")
         should_send_email, email_skip_reason, recipients = _email_send_decision(scheduled_time)
         if should_send_email:
@@ -301,6 +322,7 @@ def run_spider(scheduled_time=None):
         v2ex_topics,
         tldr_items,
         ai_source_items,
+        linux_do_items=linux_do_items,
     )
 
     logger.info("--- 写出统一 JSON ---")

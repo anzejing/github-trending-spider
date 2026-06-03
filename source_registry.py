@@ -8,6 +8,7 @@
 SOURCE_GITHUB_DAILY_ID = "github-daily"
 SOURCE_GITHUB_WEEKLY_ID = "github-weekly"
 SOURCE_HACKER_NEWS_ID = "hacker-news"
+SOURCE_LINUX_DO_ID = "linux-do"
 SOURCE_V2EX_ID = "v2ex"
 SOURCE_TLDR_AI_ID = "tldr-ai"
 SOURCE_OPENAI_ID = "openai"
@@ -34,6 +35,13 @@ SOURCE_DEFINITIONS = [
         "name": "Hacker News",
         "label": "Hacker News",
         "content_source": "Hacker News",
+        "category": "社区讨论",
+    },
+    {
+        "id": SOURCE_LINUX_DO_ID,
+        "name": "Linux.do",
+        "label": "Linux.do 技术日报",
+        "content_source": "Linux.do",
         "category": "社区讨论",
     },
     {
