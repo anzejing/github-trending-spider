@@ -20,6 +20,8 @@
     6. 时段分布（按小时统计）
 """
 
+import glob
+import os
 import re
 import sys
 from collections import defaultdict
@@ -31,6 +33,36 @@ from datetime import datetime
 # =========================================================================
 
 DEFAULT_LOG_FILE = "/root/logs/github-python/trending.log"
+
+
+# =========================================================================
+# 日志文件定位
+# =========================================================================
+
+def resolve_log_files(base_path, target_date, filter_all):
+    """
+    根据模式返回需要读取的日志文件路径列表。
+
+    轮转文件命名规则（TimedRotatingFileHandler midnight）：
+      trending.log              → 当天（正在写入）
+      trending.log.2026-06-05   → 历史某天
+
+    - filter_all=True  → 当天文件 + 所有 trending.log.* 轮转文件
+    - target_date=今天 → [base_path]
+    - target_date=历史 → [base_path.YYYY-MM-DD]
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    if filter_all:
+        files = [base_path] if os.path.exists(base_path) else []
+        rotated = sorted(glob.glob(base_path + ".*"))
+        files += rotated
+        return files
+
+    if target_date == today:
+        return [base_path]
+
+    return ["{}.{}".format(base_path, target_date)]
 
 
 # =========================================================================
@@ -295,6 +327,7 @@ def main():
     log_file = DEFAULT_LOG_FILE
     target_date = datetime.now().strftime("%Y-%m-%d")
     filter_all = False
+    explicit_file = False  # 用户通过 --file 显式指定了文件路径
 
     # 解析参数
     args = sys.argv[1:]
@@ -306,6 +339,7 @@ def main():
         elif arg == "--file" and i + 1 < len(args):
             i += 1
             log_file = args[i]
+            explicit_file = True
         elif re.match(r"\d{4}-\d{2}-\d{2}", arg):
             target_date = arg
         else:
@@ -314,19 +348,33 @@ def main():
             sys.exit(1)
         i += 1
 
-    # 读取日志文件
-    try:
-        with open(log_file, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        print("日志文件不存在: {}".format(log_file))
-        print("你可以用 --file 参数指定日志路径")
-        sys.exit(1)
-    except PermissionError:
-        print("没有权限读取日志文件: {}".format(log_file))
-        sys.exit(1)
+    # 确定需要读取的文件列表
+    # - explicit_file：直接读用户指定的单个文件，保留日期行过滤（兼容旧大文件）
+    # - 自动定位：按轮转规则找文件，文件本身已按天分开，无需日期过滤
+    if explicit_file:
+        log_files = [log_file]
+        need_date_filter = not filter_all
+    else:
+        log_files = resolve_log_files(log_file, target_date, filter_all)
+        need_date_filter = False
 
-    print("正在分析日志文件: {}".format(log_file))
+    # 读取所有目标文件
+    lines = []
+    for path in log_files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                lines += f.readlines()
+        except FileNotFoundError:
+            if not filter_all:
+                print("日志文件不存在: {}".format(path))
+                print("提示：轮转文件命名为 trending.log.YYYY-MM-DD，今天的日志在 trending.log")
+                sys.exit(1)
+            # --all 模式下某天文件不存在时静默跳过
+        except PermissionError:
+            print("没有权限读取日志文件: {}".format(path))
+            sys.exit(1)
+
+    print("正在分析日志文件: {}".format(", ".join(log_files) if len(log_files) > 1 else log_files[0] if log_files else log_file))
     print("日志总行数: {}".format(len(lines)))
 
     # 解析并过滤
@@ -334,8 +382,8 @@ def main():
     data_records = []
 
     for line in lines:
-        # 日期过滤
-        if not filter_all:
+        # 仅 explicit_file 非 --all 时按日期过滤（兼容旧的单大文件）
+        if need_date_filter:
             if not line.startswith(target_date):
                 continue
 
