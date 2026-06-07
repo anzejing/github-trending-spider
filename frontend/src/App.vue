@@ -12,15 +12,15 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <button class="history-button" type="button" @click="openHistoryDrawer">
-          {{ t('historyArchive') }}
-        </button>
         <div class="lang-switch">
           <button :class="{ active: lang === 'zh' }" @click="switchLang('zh')">中文</button>
           <span class="lang-sep">|</span>
           <button :class="{ active: lang === 'en' }" @click="switchLang('en')">EN</button>
         </div>
         <div class="update-chip">⏱ {{ countdownText }}</div>
+        <button class="history-button" type="button" @click="openHistoryDrawer">
+          {{ t('historyArchive') }}
+        </button>
         <a class="gh-link" href="https://github.com/wenbochang888/github-trending-spider" target="_blank" rel="noreferrer" aria-label="GitHub 仓库">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         </a>
@@ -62,7 +62,6 @@
           >
             <strong>{{ formatHistoryDate(dateInfo.date) }}</strong>
             <span>{{ getHistoryDateSummary(dateInfo) }}</span>
-            <em>{{ getHistoryDateBatch(dateInfo) }}</em>
           </button>
         </div>
       </aside>
@@ -186,17 +185,14 @@ const I18N = {
     defaultLabel: '最新内容',
     historyArchive: '历史归档',
     historyDrawerTitle: '历史归档',
-    historyDrawerDesc: '最近 7 天，不包含今天。选择日期后读取当天最后一个归档批次。',
+    historyDrawerDesc: '最近 7 天，不包含今天。选择日期后读取当天历史资讯。',
     historyLoading: '正在加载历史归档',
     historyLoadErr: '加载历史归档失败：',
     historyTitle: '历史资讯',
     backToToday: '返回今日资讯',
     noArchive: '暂无归档',
     archiveSources: ' 个来源',
-    archiveBatch: '批次 ',
-    archiveEmptyBatch: '无批次',
     historySourcePrefix: '当前来源：',
-    historyBatchPrefix: '归档批次：',
     footerEmailEgg: '隐藏小彩蛋: 支持邮件接收AI讯息',
     emailHint: '请将您的邮箱发送至727987105@qq.com',
     comments: ' 评论',
@@ -221,17 +217,14 @@ const I18N = {
     defaultLabel: 'Latest',
     historyArchive: 'Archive',
     historyDrawerTitle: 'Archive',
-    historyDrawerDesc: 'Last 7 days, excluding today. Dates load the latest archive batch for that day.',
+    historyDrawerDesc: 'Last 7 days, excluding today. Pick a date to read archived news.',
     historyLoading: 'Loading archive',
     historyLoadErr: 'Failed to load archive: ',
     historyTitle: 'Archive',
     backToToday: 'Back to Today',
     noArchive: 'No archive',
     archiveSources: ' sources',
-    archiveBatch: 'Batch ',
-    archiveEmptyBatch: 'No batch',
     historySourcePrefix: 'Source: ',
-    historyBatchPrefix: 'Batch: ',
     footerEmailEgg: 'Hidden easter egg: Support receiving AI updates by email',
     emailHint: 'Please send your email address to 727987105@qq.com',
     comments: ' comments',
@@ -348,7 +341,6 @@ export default {
       historyDatesError: '',
       historyMode: false,
       selectedHistoryDate: '',
-      historyBatchFile: '',
       countdownText: '',
       countdownTimer: null
     };
@@ -371,8 +363,7 @@ export default {
       if (!this.historyMode) {
         return '';
       }
-      const batchText = this.historyBatchFile || this.t('archiveEmptyBatch');
-      return `${this.t('historySourcePrefix')}${this.activeSourceLabel} · ${this.t('historyBatchPrefix')}${batchText}`;
+      return `${this.t('historySourcePrefix')}${this.activeSourceLabel}`;
     }
   },
   async created() {
@@ -447,7 +438,6 @@ export default {
       this.activeSourceId = sourceId;
       this.loading = true;
       this.errorMessage = '';
-      this.historyBatchFile = '';
       try {
         const response = await fetch(`${API_PREFIX}/history/sources/${sourceId}/dates/${this.selectedHistoryDate}`);
         if (!response.ok) {
@@ -456,11 +446,9 @@ export default {
         const payload = await response.json();
         this.items = payload.items || [];
         this.generatedAt = payload.generated_at || '';
-        this.historyBatchFile = payload.batch_file || '';
       } catch (error) {
         this.items = [];
         this.generatedAt = '';
-        this.historyBatchFile = '';
         this.errorMessage = `${this.t('loadContentErr')}${error.message}`;
       } finally {
         this.loading = false;
@@ -469,7 +457,6 @@ export default {
     async backToToday() {
       this.historyMode = false;
       this.selectedHistoryDate = '';
-      this.historyBatchFile = '';
       await this.selectSource(this.activeSourceId);
     },
     formatHistoryDate(dateText) {
@@ -483,13 +470,6 @@ export default {
         return this.t('noArchive');
       }
       return `${dateInfo.source_count}${this.t('archiveSources')}`;
-    },
-    getHistoryDateBatch(dateInfo) {
-      if (!dateInfo.has_archive || !dateInfo.sources || dateInfo.sources.length === 0) {
-        return this.t('archiveEmptyBatch');
-      }
-      const active = dateInfo.sources.find((item) => item.source_id === this.activeSourceId) || dateInfo.sources[0];
-      return `${this.t('archiveBatch')}${active.batch_file}`;
     },
     getDisplaySummary(item) {
       if (this.lang === 'zh') {
@@ -1030,7 +1010,7 @@ a {
 
 .history-date-row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) auto;
+  grid-template-columns: 72px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   width: 100%;
@@ -1071,18 +1051,6 @@ a {
   color: var(--text-3);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.history-date-row em {
-  color: var(--primary);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.history-date-row.disabled em {
-  color: var(--text-3);
 }
 
 .history-drawer-state {
@@ -1379,14 +1347,6 @@ a {
 
   .history-drawer {
     width: 100vw;
-  }
-
-  .history-date-row {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-
-  .history-date-row em {
-    grid-column: 2;
   }
 
   .open-link {
