@@ -9,7 +9,7 @@ from email.utils import format_datetime
 from xml.etree import ElementTree
 
 CHANNEL_DESCRIPTION = "AI 与技术资讯聚合摘要"
-CHANNEL_LINK = ""
+CHANNEL_LINK = "https://www.gdufe888.top/ai/"
 CHANNEL_TITLE = "每日AI前沿信息"
 
 

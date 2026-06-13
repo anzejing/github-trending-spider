@@ -65,11 +65,105 @@ cd frontend && npm install && npm run serve
 
 ## API
 
+### JSON API
+
+FastAPI 提供只读 JSON 接口，前端页面和外部系统都可以直接读取最新快照。
+
 ```bash
-curl http://localhost:8000/api/health              # 健康检查
-curl http://localhost:8000/api/sources             # 来源列表
-curl http://localhost:8000/api/sources/github-daily/latest  # 单来源数据
+curl http://localhost:8000/api/health                         # 健康检查
+curl http://localhost:8000/api/sources                        # 来源列表
+curl http://localhost:8000/api/sources/github-daily/latest    # 单来源最新数据
 ```
+
+线上 API base：
+
+```text
+https://www.gdufe888.top/api
+```
+
+常用线上接口：
+
+```text
+GET https://www.gdufe888.top/api/health
+GET https://www.gdufe888.top/api/sources
+GET https://www.gdufe888.top/api/sources/{source_id}/latest
+```
+
+`source_id` 使用稳定来源 ID，例如：
+
+```text
+github-daily
+github-weekly
+hacker-news
+linux-do
+v2ex
+tldr-ai
+openai
+anthropic
+infoq
+```
+
+### RSS
+
+RSS 适合给阅读器、自动化工具或其他系统做通用订阅。当前提供一个总订阅源，聚合所有已注册来源的最新内容。
+
+线上 RSS 地址：
+
+```text
+https://www.gdufe888.top/api/rss.xml
+```
+
+本地验证：
+
+```bash
+curl -i http://localhost:8000/api/rss.xml
+```
+
+线上验证：
+
+```bash
+curl -i https://www.gdufe888.top/api/rss.xml
+```
+
+RSS 接口只读取已有快照，不会触发实时爬虫；Redis 不可用时会沿用现有逻辑降级读取磁盘归档。更详细的字段说明和接入建议见 `docs/rss-api-guide.md`。
+
+### Skill
+
+仓库提供 `tech-trend-spider` Skill，用于让 AI 助手通过线上只读 API 查询本项目已经采集好的技术趋势数据。安装方不需要本仓库源码，也不需要 Python 爬虫依赖。
+
+<p align="center">
+  <img src="scripts/img/skill.png" width="800" alt="tech-trend-spider Skill 实操示例" />
+</p>
+
+Skill 文件：
+
+```text
+skills/tech-trend-spider/SKILL.md
+```
+
+默认 API base：
+
+```text
+https://www.gdufe888.top/api
+```
+
+适用场景：
+
+- 查询 GitHub Trending 日榜或周榜。
+- 查询 Hacker News、V2EX、Linux.do 等社区讨论。
+- 查询 TLDR AI、OpenAI、Anthropic、InfoQ AI 等 AI 资讯。
+- 按关键词在 API 返回结果中做本地过滤。
+- 按条数对 API 返回结果做本地截断。
+- 按 Markdown 或 JSON 格式输出结果。
+
+Skill 使用的接口仍然是上面的 JSON API，例如：
+
+```text
+GET https://www.gdufe888.top/api/sources
+GET https://www.gdufe888.top/api/sources/{source_id}/latest
+```
+
+注意：Skill 只消费线上已采集快照，不直接爬源站，不重新生成 AI 摘要，也不控制调度、邮件、Redis 或部署。
 
 ## 技术架构
 
