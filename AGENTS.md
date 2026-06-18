@@ -239,6 +239,7 @@ python3 scripts/log_stats.py --file /path/to.log
 - `upstream` = 原仓库(`wenbochang888/github-trending-spider`),默认 `master`
 - 同步 upstream 时:**`upstream/master` → 本地 `upstream-master`(merge/rebase)→ 必要时再 merge 到 `dev`**,不要让 upstream 直接污染 `dev`
 - 本地不存在 `master` 分支;`upstream-master` 永远只 `git fetch upstream && git merge upstream/master`,不直接 commit
+- `origin/upstream-master` 仅作本地镜像(防多机丢失),内容应与 `upstream/master` 一致;**禁止**在该分支上 push 提交或基于它开 PR
 
 ## 沟通与安全
 
