@@ -237,7 +237,8 @@ python3 scripts/log_stats.py --file /path/to.log
 
 - `origin` = 个人 fork(`anzejing/github-trending-spider`),GitHub 默认分支 `dev`
 - `upstream` = 原仓库(`wenbochang888/github-trending-spider`),默认 `master`
-- 同步 upstream 时:**`upstream/master` → 本地 `master`(merge/rebase)→ 必要时再 merge 到 `dev`**,不要让 upstream 直接污染 `dev`
+- 同步 upstream 时:**`upstream/master` → 本地 `upstream-master`(merge/rebase)→ 必要时再 merge 到 `dev`**,不要让 upstream 直接污染 `dev`
+- 本地不存在 `master` 分支;`upstream-master` 永远只 `git fetch upstream && git merge upstream/master`,不直接 commit
 
 ## 沟通与安全
 
