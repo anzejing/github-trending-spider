@@ -2,211 +2,246 @@
 
 本文件为本仓库的 AI 协作约定。所有自动化助手在读取、修改或评审本项目时必须遵守。
 
-## 项目概览
+## 项目定位
 
-这是一个 Python + Vue 全栈 AI 信息源聚合项目。主流程每天抓取 GitHub Trending、Hacker News、TLDR AI、OpenAI、Anthropic、InfoQ AI Development 等信息源，通过 GitHub Models API 生成中文摘要，按来源永久归档到磁盘，并写入 Redis 作为 3 天热数据缓存。
+**AI Daily Frontier(每日AI前沿信息)** —— Python + Vue 全栈 AI 与技术信息聚合项目。
 
-项目同时提供 FastAPI 只读接口和 Vue 3 前端资讯流页面（页面标题"每日AI前沿信息"），由 Nginx 静态托管前端、反代 `/api/` 到 FastAPI。`output/latest.json` 作为统一 JSON 兼容旧版接入点继续保留。
+每天定时抓取 **9 个**中英文 AI / 开源 / 社区信息源,通过 GitHub Models API(GPT-4o)生成中文摘要,按来源永久归档到磁盘 + Redis 3 天热数据缓存,并对外提供:
 
-## 主要入口与模块
+- FastAPI 只读 JSON / RSS / 历史归档接口
+- Vue 3 资讯流前端(中英双语,默认 `?lang=zh`,英文 `?lang=en`)
+- 可选 SMTP 邮件日报
+- `tech-trend-spider` Skill(供其他 AI 助手通过线上 API 消费已采集数据)
 
-- `main.py`: 主入口，协调所有信息源抓取、AI 摘要、JSON 写出和邮件发送。
-- `config.py`: 环境变量配置中心，所有可调参数都应从这里读取。
-- `github_trending.py`: GitHub Trending daily / weekly 抓取和项目摘要。
-- `hacker_news.py`: Hacker News Top Stories、评论抓取和社区讨论摘要。
-- `tldr_ai.py`: TLDR AI 最新一期抓取和中文整理。
-- `official_ai_sources.py`: OpenAI、Anthropic、InfoQ AI Development 信息源抓取。
-- `content_items.py`: 统一信息项模型、跨来源 JSON 适配、统一 AI 摘要、JSON 输出。
-- `content_store.py`: 按来源归档写磁盘、Redis 最新快照读写、Redis 不可用时降级读磁盘。
-- `redis_client.py`: Redis 进程级连接池，连接失败时返回 None 供调用方降级。
-- `source_registry.py`: 来源 ID、label、category 注册表，前端/API/Redis key/磁盘路径共用。
-- `api.py`: FastAPI 公开只读接口，提供 `/api/sources` 和 `/api/sources/{id}/latest`。
-- `access_log.py`: API 访问日志中间件，记录每次请求 IP/路径/耗时/状态码，每小时输出统计汇总。
-- `scheduler.py`: FastAPI 进程内采集调度器，按配置时间定时触发 `main.py` 主流程。
-- `email_builder.py`: HTML 邮件内容生成。
-- `email_sender.py`: SMTP 邮件发送。
-- `test_email.py`: SMTP 发送测试脚本。
-- `frontend/`: Vue 3 + Vue CLI 前端资讯流，页面标题"每日AI前沿信息"，侧边栏来源标签由前端映射覆盖显示。
+线上地址:https://www.gdufe888.top/ai/
 
-## 运行方式
+## 仓库拓扑
 
-安装依赖：
+```
+.
+├── main.py                # 入口:跑一次完整采集 → JSON + 归档 + 邮件
+├── config.py              # 所有可调参数(读环境变量)
+├── api.py                 # FastAPI 公开只读接口
+├── scheduler.py           # FastAPI 进程内定时调度(非 cron)
+├── access_log.py          # API 访问日志中间件 + 每小时统计
+├── logging_config.py      # 共享 logging 初始化(rotating file + stream)
+├── content_items.py       # 统一信息项 + 跨源适配 + 统一 AI 摘要
+├── content_store.py       # 按来源归档 + Redis 读写 + 历史归档
+├── redis_client.py        # 进程级 Redis 连接池
+├── source_registry.py     # 9 个 source id 的单一事实源
+├── rss_builder.py         # /api/rss.xml 聚合 feed
+├── github_trending.py     # github-daily / github-weekly 抓取 + 摘要
+├── hacker_news.py         # hacker-news 抓取 + 评论 + 摘要
+├── linux_do_news.py       # linux-do: 解析 news.linuxe.top 日报
+├── v2ex.py                # v2ex: 全站热帖 + 节点白名单 + 回复 + 摘要
+├── tldr_ai.py             # tldr-ai 抓取 + 中文整理
+├── official_ai_sources.py # openai / anthropic / infoq 抓取
+├── email_builder.py       # HTML 邮件模板
+├── email_sender.py        # SMTP 发送 + 失败通知
+├── test_email.py          # SMTP 发送测试脚本
+├── frontend/              # Vue 3 + Vue CLI 前端(1444 行 App.vue)
+├── tests/                 # unittest 风格单元测试
+├── scripts/               # 部署 / 启动 / 日志统计
+├── skills/tech-trend-spider/  # 供其他 AI 助手消费的 Skill
+├── docs/                  # 公开文档(rss-api-guide.md 等)
+├── requirements.txt       # 5 个依赖(见下方)
+├── .env.example           # 环境变量模板
+├── AGENTS.md / README*    # 本文件与项目说明
+└── LICENSE                # MIT
+```
+
+## 9 个信息源(source id 是稳定契约)
+
+| source id | 中文 label | 类别 | 抓取模块 | 备注 |
+|---|---|---|---|---|
+| `github-daily` | GitHub 日榜 | 开源趋势 | `github_trending.py` | GitHub Trending Daily |
+| `github-weekly` | GitHub 周榜 | 开源趋势 | `github_trending.py` | GitHub Trending Weekly |
+| `hacker-news` | Hacker News | 社区讨论 | `hacker_news.py` | 含 Top 评论 |
+| `linux-do` | Linux.do 技术日报 | 社区讨论 | `linux_do_news.py` | 只解析 `news.linuxe.top` 日报页,**不**抓原帖正文 |
+| `v2ex` | V2EX | 社区讨论 | `v2ex.py` | 节点白名单,技术帖排前 |
+| `tldr-ai` | TLDR AI | AI 快讯 | `tldr_ai.py` | 最新一期 |
+| `openai` | OpenAI | AI 官方更新 | `official_ai_sources.py` | openai.com/news |
+| `anthropic` | Anthropic | AI 官方更新 | `official_ai_sources.py` | anthropic.com/news |
+| `infoq` | InfoQ AI | AI 工程实践 | `official_ai_sources.py` | 聚合多个 InfoQ RSS |
+
+**新增源时必须先在 `source_registry.SOURCE_DEFINITIONS` 注册 source id**,否则:
+- API `/api/sources` 不会列出
+- `content_store.persist_source_snapshots` 会跳过该源(因为找不到 `get_source_by_content_source`)
+- 前端 `/api/sources` 列表中也看不到
+
+## 统一信息项(content_items.py)
+
+```python
+make_content_item(
+    source, category, title, url,
+    published_at="",
+    original_summary="",
+    chinese_summary="",
+    backend_focus="",
+    meta={},
+)
+```
+
+- `source`(字符串)必须匹配 `source_registry.SOURCE_BY_CONTENT_SOURCE` 中的某个 content_source(GitHub Trending Daily / Hacker News / Linux.do / V2EX / TLDR AI / OpenAI / Anthropic / InfoQ AI Development)
+- `meta` 是源特定的额外信息(语言、stars、回复数、节点名等)
+- AI 摘要失败 / 缺 `GITHUB_TOKEN` 时,`chinese_summary` 自动填入降级文案,卡片仍可展示
+
+Skill 数据契约:`skills/tech-trend-spider/references/output-schema.md`
+
+## 关键运行机制(改代码前必读)
+
+1. **独立容错**:`main.run_spider()` 中每个源都有自己的 try/except,任一源失败不影响其他源
+2. **降级摘要**:无 `GITHUB_TOKEN` 时所有 AI 摘要走降级文案,卡片仍有原文摘要
+3. **Redis 可选**:`redis_client.get_redis_client()` 失败返回 None,API 自动降级读磁盘归档(`served_from=archive`)
+4. **进程内调度**:`scheduler.py` 用 `threading.Lock` + 单线程定时跑 `run_spider()`,**生产部署必须用单 worker uvicorn**(`--workers 1`),否则多 worker 同时启动调度器会重复跑采集并写多份归档
+5. **写盘每日归档**:`output/<source>/<YYYY-MM-DD>/<batch>.json`,批号自增(同一天内多次采集会写出 `01.json`, `02.json` ...)
+6. **API 数据只读**:FastAPI 接口只读取已有快照,**不**触发实时爬虫;只有 `scheduler` 才会主动跑采集
+
+## 环境变量
+
+**敏感信息只能通过环境变量配置**,不要写入代码、README 示例真实值或提交记录。`.env` 已 gitignore。
+
+**唯一必填**:`GITHUB_TOKEN`(GitHub Settings → Tokens,勾选 `models:read`)。
+缺失时:所有 AI 摘要走降级,卡片仍有原文摘要。
+
+完整清单(全部读自 `config.py`,默认值与说明以源码为准):
+
+核心 AI:
+- `GITHUB_TOKEN`(必填)— GitHub Models API token
+- `AI_API_URL`(默认 `https://models.inference.ai.azure.com`)
+- `AI_MODEL`(默认 `gpt-4o`,可选 `gpt-4o-mini` / `deepseek-r1`)
+
+数量(每个源的上限;实际不足时按源实际返回):
+- `GITHUB_TRENDING_TOP_COUNT`(10)、`HN_TOP_COUNT`(10)、`HN_COMMENTS_PER_STORY`(10)
+- `TLDR_AI_TOP_COUNT`(10)、`V2EX_TOP_COUNT`(10)、`V2EX_REPLIES_PER_TOPIC`(10)
+- `LINUX_DO_MAX_ITEMS`(0 = 全部)、`OPENAI_NEWS_COUNT`(10)、`ANTHROPIC_NEWS_COUNT`(10)、`INFOQ_AI_NEWS_COUNT`(10)
+
+可调 URL:
+- `HN_API_BASE`、`TLDR_AI_HOME_URL`、`V2EX_API_BASE`、`LINUX_DO_NEWS_URL`
+- `OPENAI_NEWS_URL` / `OPENAI_NEWS_RSS_URL`、`ANTHROPIC_NEWS_URL`、`INFOQ_AI_RSS_URLS`(逗号分隔多 RSS)
+
+重试 / 节流:
+- `HN_MAX_RETRIES`(5)、`HN_CONCURRENT_WORKERS`(10)、`TLDR_AI_MAX_RETRIES`(5)
+- `V2EX_MAX_RETRIES`(5)、`V2EX_REQUEST_INTERVAL`(0.5 秒)、`LINUX_DO_MAX_RETRIES`(5)、`OFFICIAL_AI_MAX_RETRIES`(5)
+
+Redis / API:
+- `REDIS_URL`、`REDIS_KEY_PREFIX`、`REDIS_SNAPSHOT_TTL_SECONDS`(默认 3 天)、`REDIS_SOCKET_TIMEOUT_SECONDS`
+- `API_MAX_ITEMS_PER_SOURCE`(100)、`API_CORS_ORIGINS`(逗号分隔,空 = 不开 CORS)
+
+调度:
+- `SPIDER_SCHEDULER_ENABLED`(默认 true,API 进程内是否启用)
+- `SPIDER_SCHEDULE_TIMES`(默认 `07:50,15:50,23:50`,逗号分隔 HH:MM)
+- `SPIDER_RUN_ON_STARTUP`(默认 false,API 启动时是否立即跑一次)
+
+邮件:
+- `SMTP_SERVER`/`SMTP_PORT`(默认 465)/`SMTP_USER`/`SMTP_PASSWORD`/`MAIL_FROM`/`MAIL_TO`
+- `MAIL_TO_BY_TIME`(JSON 对象,按调度时间映射收件人,优先于 `MAIL_TO` / `EMAIL_SEND_TIMES`)
+- `SEND_EMAIL_ENABLED`(默认 false)、`EMAIL_SEND_TIMES`(默认 `07:50`,白名单)
+- 决策逻辑:`scheduler` 传入 `scheduled_time`,`main._email_send_decision` 决定是否发、收件人是谁
+
+日志 / 输出:
+- `LOG_FILE`(默认 `/root/logs/github-python/trending.log`,`TimedRotatingFileHandler` midnight,`backupCount=30`)
+- `OUTPUT_JSON_PATH`(默认 `output/latest.json`)、`OUTPUT_ARCHIVE_DIR`(默认 `output`)
+
+## 本地开发
 
 ```bash
+# 安装依赖(只 5 个:requests / beautifulsoup4 / fastapi / uvicorn / redis)
 pip3 install -r requirements.txt
+
+# 单次采集(GITHUB_TOKEN 必填,否则 AI 摘要会走降级文案)
+source .env 2>/dev/null || true
+python3 main.py
+
+# 启动 API(含进程内调度 + 访问日志 + 统计)
+python3 -m uvicorn api:app --host 0.0.0.0 --port 8000
+
+# 前端开发(默认 127.0.0.1:8080)
+cd frontend && npm install && npm run serve
+
+# 运行测试(标准 unittest)
+python3 -m unittest discover tests -v
 ```
 
-本地运行时先确保环境变量已生效。常见方式：
+注意:
+- 本地没有 `/root/logs/github-python/` 目录时,`logging_config.setup_logging()` 会自动 `os.makedirs(log_dir, exist_ok=True)`;若目录不可写,请 `LOG_FILE=/tmp/spider.log python3 main.py`
+- `LOG_FILE` 由 `main.py` 和 `api.py` 双方共享,启动任一入口都会创建 rotating file handler
+- 测试运行不依赖网络,使用 `unittest.mock.patch` 隔离 requests
+
+## 公开接口(api.py)
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 健康检查,固定返回 `{status:"ok"}` |
+| GET | `/api/sources` | 注册来源列表 + count |
+| GET | `/api/sources/{source_id}/latest` | 单来源最新快照;返回 `served_from`: `redis` / `archive` / `empty` |
+| GET | `/api/rss.xml` | RSS 2.0 聚合 feed(只读快照,不触发爬虫) |
+| GET | `/api/history/dates` | 最近 7 天历史归档日期(**不**含今天) |
+| GET | `/api/history/sources/{source_id}/dates/{date_text}` | 指定来源、日期的历史归档快照 |
+
+未知 source_id 返 404;非法日期 `YYYY-MM-DD` 返 400。
+
+字段映射细节见 `docs/rss-api-guide.md`(RSS 字段表)。
+
+## 前端约定
+
+- 路由:`/ai/`(Nginx 静态托管 `frontend/dist/`),`/api/` 反代到 FastAPI `:8000`
+- 双语:`?lang=zh` / `?lang=en`,优先级 URL 参数 > localStorage > 默认 `zh`
+- 来源展示名覆盖:`SOURCE_DISPLAY_MAP` / `SOURCE_DISPLAY_MAP_EN`,只在 `frontend/src/App.vue` 内,**不**改后端 `source_registry.py`
+- 页面 title(`public/index.html`):"每日AI前沿信息"
+
+## 部署脚本
+
+- `scripts/start_backend.sh`:装依赖 + kill 旧 uvicorn + 后台启动新进程。会读 `~/.bash_profile` 与 `.env`
+- `scripts/start_frontend.sh`:开发模式 `npm run serve`(默认 127.0.0.1:8080);**生产用 `cd frontend && npm run build` 然后 Nginx 托管 `dist/`**
+- `scripts/start_all.sh`:先后台启动 backend / frontend,pid 写入 `.runtime/`(已 gitignore)
+- `scripts/log_stats.py`:解析 access log,出访问统计 + 数据来源(Redis 命中 / 磁盘降级)
+
+## 日志标签
+
+| 标签 | 含义 |
+|---|---|
+| `[访问]` | 每次 API 请求记录(IP / 路径 / 状态码 / 耗时) |
+| `[数据]` | API 数据来源追踪(来源 / 读取自 redis-archive / 条数 / 数据生成时间) |
+| `[统计]` | 每小时访问汇总(独立 IP / 热门接口 Top 5 / 活跃 IP Top 5) |
+| `[RSS]` | `/api/rss.xml` 请求汇总(来源数 / 条数) |
+| `[启动]` / `[关闭]` | API 进程生命周期 |
+
+排查命令:
 
 ```bash
-source ~/.bash_profile
-LOG_FILE=/private/tmp/github-trending-spider-run.log python3 main.py
+python3 scripts/log_stats.py                # 当天
+python3 scripts/log_stats.py 2026-06-15     # 指定日期
+python3 scripts/log_stats.py --all          # 全部日志(含轮转文件 trending.log.YYYY-MM-DD)
+python3 scripts/log_stats.py --file /path/to.log
 ```
-
-服务器定时任务参考：
-
-```bash
-source ~/.bash_profile && cd /root/work/workspace/gitee/github-trending-spider && /usr/bin/python3 main.py
-```
-
-默认日志路径是 `/root/logs/github-python/trending.log`。本地没有该目录时，应通过 `LOG_FILE` 指向可写路径。
-
-## 环境变量约定
-
-敏感信息只能通过环境变量配置，不要写入代码、README 示例真实值或提交记录。
-
-核心变量：
-
-- `GITHUB_TOKEN`: GitHub Models API token，需要 `models:read` 权限。
-- `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_TO`: SMTP 邮件发送配置。
-- `LOG_FILE`: 日志路径。
-- `OUTPUT_JSON_PATH`: 统一 JSON 输出路径，默认 `output/latest.json`。
-
-数量变量：
-
-- `GITHUB_TRENDING_TOP_COUNT`: GitHub daily / weekly 各获取前 N 个仓库，默认 10。
-- `HN_TOP_COUNT`: Hacker News 获取前 N 个帖子，默认 10。
-- `HN_COMMENTS_PER_STORY`: 每帖获取前 N 条顶级评论，默认 10。
-- `TLDR_AI_TOP_COUNT`: TLDR AI 获取前 N 条内容，默认 10。
-- `OPENAI_NEWS_COUNT`: OpenAI 获取前 N 条内容，默认 10。
-- `ANTHROPIC_NEWS_COUNT`: Anthropic 获取前 N 条内容，默认 10。
-- `INFOQ_AI_NEWS_COUNT`: InfoQ 获取前 N 条内容，默认 10。
-
-数量配置遵循“最多取 N 条”：如果配置为 100，但源头实际只解析到 14 条，则只展示 14 条。
-
-## 输出与忽略文件
-
-- `output/latest.json`: 运行生成的统一信息项 JSON，供后续后端读取。
-- `output/email_preview.html`: 可用于本地预览邮件效果。
-- `output/` 已在 `.gitignore` 中忽略，运行产物不要提交。
-- `.env` 已忽略，真实密钥不要提交。
-- `.task/` 已忽略，用于存放 AI 任务计划和任务记录。
 
 ## 任务文件规则
 
-以后所有新任务计划、任务拆解、执行清单、阶段性记录，都必须写入 `.task/` 目录，不要再新增或扩写根目录任务文件。
-
-生成新任务文件之前，必须先参考已有任务记录，按以下顺序读取：
-
-1. 根目录 `tasks.md`: 当前 AI 后端专项信息源 v1 的完整实施历史。
-2. `.task/tasks.md`: 更早的 HN 与 TLDR AI 接入历史。
-3. `.task/` 下其他同类任务文件: 如果存在，优先参考同主题最近任务。
-
-参考时重点看：任务标题粒度、涉及文件、勾选项写法、验证记录、是否有历史遗留问题。不要重复规划已经完成的内容。
-
-命名格式：
-
-```text
-.task/YYYY-MM-DD_N-short-slug.md
-```
-
-示例：
-
-```text
-.task/2026-05-29_1-add-source-count-config.md
-.task/2026-05-29_2-fix-infoq-feed.md
-```
-
-要求：
-
-- 每个独立需求使用单独任务文件。
-- 同一天多个任务用 `_1`, `_2`, `_3` 区分。
-- 文件名 slug 使用英文小写和连字符，表达任务主题。
-- 任务文件内至少记录：目标、涉及文件、执行步骤、验证结果、遗留问题。
-- 根目录 `tasks.md` 只视为历史记录；新任务不要继续写入该文件。
-
-## 当前任务历史摘要
-
-当前仓库已有两批主要任务记录，可作为后续任务拆解模板。
-
-### `.task/tasks.md` 历史任务
-
-- 新增 Hacker News Top 10 + 评论总结功能：
-  - 新增 `hacker_news.py`，通过 HN Firebase API 获取 Top Stories 和评论。
-  - 抽出 `email_sender.py`、`email_builder.py`，让邮件发送和 HTML 生成从 GitHub 爬虫中解耦。
-  - 新建 `main.py` 作为统一入口，协调 GitHub + HN + AI + 邮件流程。
-  - 引入独立容错：GitHub 和 HN 任一成功即可发送邮件。
-- 新增 TLDR AI 中文内容接入：
-  - 新增 `tldr_ai.py`，从 TLDR AI 官方归档页解析最新 issue。
-  - 接入 TLDR AI 阶段，支持未配置 `GITHUB_TOKEN` 时降级展示英文摘要。
-  - 更新邮件模板和 README，形成 GitHub + HN + TLDR AI 三源日报。
-
-### 根目录 `tasks.md` 当前任务
-
-- AI 后端专项信息源 v1：
-  - 新增 `content_items.py`，统一字段为 `source/category/title/url/published_at/original_summary/chinese_summary/backend_focus`。
-  - 新增 `official_ai_sources.py`，接入 OpenAI、Anthropic、InfoQ AI Development。
-  - `main.py` 调整为 6 个源独立抓取、独立容错，同时生成邮件和 `output/latest.json`。
-  - `email_builder.py` 保留 GitHub/HN/TLDR AI 旧展示，并新增 OpenAI、Anthropic、InfoQ 分板块展示。
-  - InfoQ 单个 `ai-development/news` feed 当前条目少，已改为聚合 AI Development、Artificial Intelligence、Generative AI 多个官方 RSS。
-  - 数量配置环境变量化：`GITHUB_TRENDING_TOP_COUNT`、`HN_TOP_COUNT`、`TLDR_AI_TOP_COUNT`、`OPENAI_NEWS_COUNT`、`ANTHROPIC_NEWS_COUNT`、`INFOQ_AI_NEWS_COUNT` 等。
-
-后续任务若涉及新增源、调整邮件、调整 JSON 结构或改运行配置，必须先对照以上历史，复用已有模块边界，不要重新设计主流程。
-
-### `.task/2026-05-29_1-frontend-redesign.md` 前端重设计
-
-- 全量重写 `frontend/src/App.vue` 视觉层，风格定位「科技资讯媒体 · Editorial」。
-- 引入 Google Fonts：DM Sans + Noto Sans SC，替换系统默认字体。
-- 品牌区：渐变图标（蓝→紫）+ 标题"每日AI前沿信息" + 副标题 + "⏱ 每 8 小时更新" chip。
-- 删除搜索框及相关 `keyword` / `filteredItems` / `servedFromText` 逻辑。
-- 删除 feed toolbar 中的更新时间、数据来源、条数计数展示。
-- 内容卡片精简为：标题 + 中文摘要 + "阅读原文 →"，去掉 `backend_focus`、meta tags、`published_at`。
-- 新增 `SOURCE_DISPLAY_MAP` 前端覆盖映射（不改后端 `source_registry.py`）：
-  - github-daily → 今日开源热榜 / GitHub · 日榜
-  - github-weekly → 本周开源精选 / GitHub · 周榜
-  - hacker-news → 硅谷社区热议 / Hacker News
-  - tldr-ai → AI 速报精选 / TLDR AI
-  - openai → OpenAI 最新动态 / 官方更新
-  - anthropic → Anthropic 最新动态 / 官方更新
-  - infoq → AI 工程实践 / InfoQ AI
-- loading 状态改为 3 个 shimmer 骨架卡片动画，替代纯文字"正在加载数据"。
-- 侧边栏 active 状态增加左竖线 indicator；卡片 hover 增加左竖线 + 背景过渡。
-- `public/index.html` title 同步改为"每日AI前沿信息"。
+- 所有新任务计划写入 `.task/YYYY-MM-DD_N-short-slug.md`,**不要**新增根目录任务文件
+- 命名:`YYYY-MM-DD_N-short-slug.md`,N 是当天的序号(`_1`, `_2`, ...)
+- 任务文件内至少记录:目标、涉及文件、执行步骤、验证结果、遗留问题
+- 生成新任务前,**必须**先 `ls .task/` 看最近同类任务文件,沿用任务粒度 / 勾选写法 / 验证记录格式
 
 ## 开发约定
 
-- 项目已引入 FastAPI + Vue 前端作为标准 Web 服务层，不再需要从零引入；新功能直接在现有 `api.py` / `frontend/` 上扩展。
-- 新增信息源时，应优先选择官方 RSS/API；HTML 页面解析只能作为兜底。
-- 每个信息源必须独立容错，不能因单个源失败导致其他源无法输出。
-- 新增来源必须适配到 `content_items.py` 的统一字段：
-  - `source`
-  - `category`
-  - `title`
-  - `url`
-  - `published_at`
-  - `original_summary`
-  - `chinese_summary`
-  - `backend_focus`
-- AI 摘要失败或缺少 `GITHUB_TOKEN` 时，必须保留原始标题、链接和原文摘要，并给出明确降级文案。
-- 不要把运行生成的 `output/`、日志、`.env`、缓存文件加入版本控制。
+1. **新增源**:必须先注册到 `source_registry.SOURCE_DEFINITIONS` 并实现 `fetch_xxx()` + `ai_summarize_xxx()`(或适配到 `content_items.build_all_content_items`)。**优先用官方 RSS / API**,HTML 解析只作兜底
+2. **每个源独立容错**:在 `main.py` 中包 try/except,失败后该源空列表继续走其他源,不要让单个源挂掉整次采集
+3. **AI 摘要失败降级**:`content_items.summarize_content_items` 已处理降级文案,新源摘要函数也应遵守
+4. **数量配置**:每个源 TOP_N 走环境变量,默认值写 `config.py`,业务逻辑读 `config` 模块
+5. **真实密钥**:token / SMTP 授权码 / 邮箱密码只能报告"已设置/未设置/长度",禁止明文写入任何文件
+6. **不要提交**:`output/`、`.env`、`.task/`、`.runtime/`、`__pycache__/`、`frontend/dist/`、`frontend/node_modules/`、`.log`(均在 `.gitignore`)
+7. **生产 uvicorn 单 worker**:`--workers 1`,否则 scheduler 会在多个进程里同时启动,采集会重复执行并产生多份归档
 
-## 验证建议
+## fork 同步策略(本仓库上下文)
 
-基础检查：
-
-```bash
-python3 -m py_compile main.py config.py github_trending.py hacker_news.py tldr_ai.py official_ai_sources.py content_items.py content_store.py redis_client.py scheduler.py source_registry.py api.py access_log.py email_builder.py email_sender.py
-```
-
-本地完整运行：
-
-```bash
-source ~/.bash_profile && LOG_FILE=/private/tmp/github-trending-spider-run.log python3 main.py
-```
-
-如果只想验证邮件模板或 JSON 写出，优先使用小样本构造测试，避免频繁发送真实邮件。
-
-日志排查命令（部署后可用）：
-
-```bash
-grep "\[访问\]" /root/logs/github-python/trending.log   # 每次请求记录
-grep "\[数据\]" /root/logs/github-python/trending.log   # 数据来源追踪（Redis/磁盘）
-grep "\[统计\]" /root/logs/github-python/trending.log   # 每小时访问汇总
-```
+- `origin` = 个人 fork(`anzejing/github-trending-spider`),GitHub 默认分支 `dev`
+- `upstream` = 原仓库(`wenbochang888/github-trending-spider`),默认 `master`
+- 同步 upstream 时:**`upstream/master` → 本地 `master`(merge/rebase)→ 必要时再 merge 到 `dev`**,不要让 upstream 直接污染 `dev`
 
 ## 沟通与安全
 
-- 回答用户时默认使用中文。
-- 对不确定点先询问，不要猜测。
-- 修改前先查代码事实，避免凭 README 或记忆判断。
-- 任何真实 token、邮箱授权码、密码只允许报告“已设置/未设置/长度”，不要明文输出。
+- 回答用户时默认使用中文
+- 对不确定点先询问,不要猜测
+- 修改前先查代码事实,避免凭 README 或记忆判断
+- 任何真实 token / 邮箱授权码 / 密码只允许报告"已设置 / 未设置 / 长度",不要明文输出

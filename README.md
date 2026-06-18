@@ -33,13 +33,16 @@
 
 ## 功能特性
 
-- **6 大信息源** — GitHub Trending (日/周)、Hacker News、TLDR AI、OpenAI、Anthropic、InfoQ AI
+- **9 大信息源** — GitHub Trending（日榜 / 周榜）、Hacker News、Linux.do、V2EX、TLDR AI、OpenAI、Anthropic、InfoQ AI
 - **AI 中文摘要** — GPT-4o 生成面向后端工程师的中文总结，关注工程落地
 - **中英双语** — 前端支持 `?lang=en` / `?lang=zh` 切换，英文用户直接看原文摘要
 - **统一 JSON** — 所有来源输出统一字段结构，`output/latest.json`
 - **按来源归档** — 磁盘永久保留 + Redis 3 天热数据缓存
 - **独立容错** — 任一源失败不影响其他源输出
 - **内置定时采集** — FastAPI 进程内调度器，默认每天 3 次
+- **RSS 总订阅** — `GET /api/rss.xml` 聚合全部来源（只读快照，不触发爬虫）
+- **历史归档** — 保留最近 7 天按日期的历史快照（`/api/history/*`）
+- **Skill 接入** — 配套 `tech-trend-spider` Skill，让其他 AI 助手通过线上 API 消费已采集数据
 - **Vue 前端** — 卡片式资讯流，骨架屏加载，响应式设计
 
 ## 快速开始
@@ -168,29 +171,49 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 ## 技术架构
 
 ```
-采集层: main.py → github_trending / hacker_news / tldr_ai / official_ai_sources
-数据层: content_items.py → content_store.py → Redis + 磁盘归档
-服务层: api.py (FastAPI) + scheduler.py (定时采集)
-展示层: frontend/ (Vue 3) → Nginx 静态托管
+采集层: main.py
+  → github_trending (github-daily / github-weekly)
+  → hacker_news (含评论)
+  → linux_do_news (linux-do, 仅解析 news.linuxe.top 日报)
+  → v2ex (含回复, 节点白名单)
+  → tldr_ai
+  → official_ai_sources (openai / anthropic / infoq)
+数据层: content_items.py (统一字段) → content_store.py → Redis 3d + 磁盘归档
+服务层: api.py (FastAPI 只读 + RSS + 历史归档)
+  + scheduler.py (进程内定时采集, 单 worker uvicorn)
+  + access_log.py (访问日志 + 每小时统计)
+展示层: frontend/ (Vue 3 + 中英双语) → Nginx 静态托管
+消费层: skills/tech-trend-spider/ (供其他 AI 助手调用线上 API)
 ```
 
 ## 配置
 
-所有配置通过环境变量，均有合理默认值：
+所有配置通过环境变量，均有合理默认值。模板见 `.env.example`，完整定义见 `config.py`。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `GITHUB_TOKEN` | - | GitHub Models API token (必须) |
-| `GITHUB_TRENDING_TOP_COUNT` | 10 | GitHub 各榜单取前 N 条 |
-| `HN_TOP_COUNT` | 10 | HN 取前 N 条 |
+| `GITHUB_TOKEN` | - | GitHub Models API token（必填，缺失时 AI 摘要走降级文案） |
+| `AI_API_URL` | `https://models.inference.ai.azure.com` | GitHub Models 接口 |
+| `AI_MODEL` | `gpt-4o` | 也支持 `gpt-4o-mini` / `deepseek-r1` |
+| `GITHUB_TRENDING_TOP_COUNT` | 10 | GitHub 日榜 / 周榜各取前 N 条 |
+| `HN_TOP_COUNT` / `HN_COMMENTS_PER_STORY` | 10 / 10 | HN 取前 N 条 / 每帖前 N 条评论 |
 | `TLDR_AI_TOP_COUNT` | 10 | TLDR AI 取前 N 条 |
-| `REDIS_URL` | redis://localhost:6379/0 | Redis 连接地址 |
-| `SPIDER_SCHEDULE_TIMES` | 07:50,15:50,23:50 | 每天采集时间 |
+| `V2EX_TOP_COUNT` / `V2EX_REPLIES_PER_TOPIC` | 10 / 10 | V2EX 取前 N 条 / 每帖前 N 条回复 |
+| `LINUX_DO_MAX_ITEMS` | 0 (全部) | Linux.do 日报取前 N 条 |
+| `OPENAI_NEWS_COUNT` / `ANTHROPIC_NEWS_COUNT` / `INFOQ_AI_NEWS_COUNT` | 10 / 10 / 10 | 三个官方 AI 源取前 N 条 |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接地址（不可用时自动降级读磁盘） |
+| `REDIS_SNAPSHOT_TTL_SECONDS` | 259200 (3 天) | Redis 快照过期时间 |
+| `API_MAX_ITEMS_PER_SOURCE` | 100 | 单接口最多返回条数 |
+| `API_CORS_ORIGINS` | 空 | 逗号分隔白名单，空 = 不开 CORS |
+| `SPIDER_SCHEDULER_ENABLED` | true | API 进程内是否启用定时采集 |
+| `SPIDER_SCHEDULE_TIMES` | 07:50,15:50,23:50 | 每天采集时间（HH:MM,逗号分隔） |
+| `SPIDER_RUN_ON_STARTUP` | false | API 启动时是否立即跑一次 |
 | `SEND_EMAIL_ENABLED` | false | 是否发送邮件 |
 | `EMAIL_SEND_TIMES` | 07:50 | 未配置 `MAIL_TO_BY_TIME` 时，开启邮件后允许发送邮件的调度时间 |
-| `MAIL_TO_BY_TIME` | - | 按调度时间指定不同收件人，JSON 对象格式 |
+| `MAIL_TO_BY_TIME` | - | 按调度时间指定不同收件人，JSON 对象格式，优先于 `MAIL_TO` |
+| `LOG_FILE` | `/root/logs/github-python/trending.log` | 日志路径（midnight 轮转，保留 30 天） |
 
-> 完整配置项见源码 `config.py`
+> 重试 / 节流类配置（`HN_MAX_RETRIES`、`V2EX_REQUEST_INTERVAL`、`OFFICIAL_AI_MAX_RETRIES` 等）见 `config.py`。
 
 ## 部署
 
